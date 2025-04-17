@@ -37,6 +37,7 @@ apple_reminders_todo:
   path: /config/todo_data.json  # Path to your JSON file
   todo_list: todo.local_todo    # Your local todo entity ID
   scan_interval: 300            # Check for updates every 5 minutes (optional)
+```
 
 ## JSON Format
 
@@ -61,7 +62,7 @@ Your JSON file should have the following structure:
   ],
   "timestamp": "2025-03-15T18:13:39+01:00"
 }
-
+```
 
 ## Apple Shortcuts Setup
 
