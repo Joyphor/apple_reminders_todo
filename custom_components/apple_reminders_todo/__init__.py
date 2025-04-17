@@ -94,17 +94,25 @@ async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id:
         if not todo_entity:
             _LOGGER.error("Todo entity not found: %s", todo_entity_id)
             return
-            
-        # Clear existing todos first
-        existing_todos = todo_entity.todo_items
-        if existing_todos:
-            uids_to_remove = [item.uid for item in existing_todos if item.uid]
-            if uids_to_remove:
-                await todo_entity.async_delete_todo_items(uids=uids_to_remove)
         
-        # Add new todos from JSON
+        # Get existing todos
+        existing_todos = todo_entity.todo_items or []
+        
+        # Delete all existing items in one operation
+        if existing_todos:
+            try:
+                uids_to_remove = [item.uid for item in existing_todos if item.uid]
+                if uids_to_remove:
+                    _LOGGER.debug("Removing all %d existing items", len(uids_to_remove))
+                    await todo_entity.async_delete_todo_items(uids=uids_to_remove)
+                    _LOGGER.debug("Successfully removed all existing items")
+            except Exception as del_err:
+                _LOGGER.warning("Error during bulk deletion: %s", del_err)
+                # If bulk deletion fails, we'll still try to proceed with adding new items
+        
+        # Add new items from JSON
+        added_count = 0
         for reminder in reminders:
-            # Create the todo item with all the additional information
             try:
                 item = TodoItem(
                     uid=generate_stable_uid(reminder),
@@ -122,16 +130,19 @@ async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id:
                             item.due = due_date
                     except (ValueError, TypeError) as err:
                         _LOGGER.warning("Failed to parse due date %s: %s", due_date_str, err)
-                        
+                
+                # Create new item
                 await todo_entity.async_create_todo_item(item=item)
+                added_count += 1
+                    
             except Exception as item_err:
                 _LOGGER.error("Error creating todo item for %s: %s", reminder.get('title'), item_err)
-            
-        _LOGGER.info("Successfully updated %d todos from %s", len(reminders), path)
+        
+        _LOGGER.info("Todo list update: removed %d existing items, added %d new items", 
+                    len(existing_todos), added_count)
         
     except Exception as ex:
         _LOGGER.error("Error updating todos: %s", ex)
-
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Apple Reminders Todo from a config entry."""
