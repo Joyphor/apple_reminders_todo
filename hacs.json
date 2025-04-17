@@ -1,0 +1,7 @@
+{
+    "name": "Apple Reminders Todo",
+    "content_in_root": false,
+    "render_readme": true,
+    "domains": ["apple_reminders_todo"],
+    "homeassistant": "2023.8.0"
+}

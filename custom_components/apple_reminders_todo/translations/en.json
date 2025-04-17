@@ -1,0 +1,23 @@
+{
+    "config": {
+      "step": {
+        "user": {
+          "title": "Apple Reminders Todo",
+          "description": "Set up Apple Reminders Todo integration",
+          "data": {
+            "path": "Path to JSON file",
+            "todo_list": "Home Assistant Todo List entity ID",
+            "scan_interval": "Scan interval in seconds"
+          }
+        }
+      },
+      "error": {
+        "file_not_found": "JSON file not found at specified path",
+        "entity_not_found": "Todo list entity not found",
+        "invalid_path": "Invalid file path"
+      },
+      "abort": {
+        "already_configured": "This integration is already configured"
+      }
+    }
+  }

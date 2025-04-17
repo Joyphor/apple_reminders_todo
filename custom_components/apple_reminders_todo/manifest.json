@@ -1,0 +1,11 @@
+{
+    "domain": "apple_reminders_todo",
+    "name": "Apple Reminders Todo",
+    "documentation": "https://github.com/Joyphor/apple_reminders_todo",
+    "dependencies": ["todo"],
+    "codeowners": ["@Joyphor"],
+    "requirements": [],
+    "iot_class": "local_polling",
+    "version": "0.0.1",
+    "config_flow": true
+  }
