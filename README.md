@@ -2,7 +2,8 @@
 
 This integration allows you to import your Apple Reminders into Home Assistant's local Todo lists. 
 
-!!! This integration is vibe coded with AI and I have no idea what I'm doing !!!
+
+**!!! This integration is vibe coded with AI and I have no idea what I'm doing !!!**
 
 ## Features
 
