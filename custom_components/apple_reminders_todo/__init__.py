@@ -40,6 +40,10 @@ CONFIG_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+def _read_json_file(path: str) -> dict:
+    """Read JSON file and return parsed data."""
+    with open(path, "r") as f:
+        return json.load(f)
 
 def generate_stable_uid(reminder: dict) -> str:
     """Generate a stable, unique ID for a reminder."""
@@ -76,13 +80,14 @@ def create_rich_description(reminder: dict) -> str:
 async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id: str) -> None:
     """Update Home Assistant todos from JSON file."""
     try:
-        if not os.path.exists(path):
+        # Check file existence in an executor
+        file_exists = await hass.async_add_executor_job(os.path.exists, path)
+        if not file_exists:
             _LOGGER.warning("JSON file not found: %s", path)
             return
 
-        # Read the JSON file
-        with open(path, "r") as f:
-            json_data = json.load(f)
+        # Read the JSON file in an executor
+        json_data = await hass.async_add_executor_job(_read_json_file, path)
             
         # Get reminders from the proper JSON structure
         reminders = json_data.get("items", [])
@@ -159,11 +164,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     hass.services.async_register(DOMAIN, "update_todos", handle_update_service)
     
-    # Set up periodic updates
-    async_track_time_interval(
-        hass, 
-        lambda now: hass.async_create_task(update_todos_from_json(hass, path, todo_entity_id)), 
-        timedelta(seconds=scan_interval)
+    # Set up periodic updates with proper threading approach
+    def _handle_interval(now):
+        """Handle interval timer callback."""
+        hass.add_job(update_todos_from_json, hass, path, todo_entity_id)
+    
+    # Store the remove callback function so we can clean up on unload
+    entry.async_on_unload(
+        async_track_time_interval(
+            hass, 
+            _handle_interval,
+            timedelta(seconds=scan_interval)
+        )
     )
     
     # Initial update
@@ -174,8 +186,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Remove the update interval
-    # The service will be removed automatically
+    # Note: We don't need to manually remove the time interval listener
+    # since we used entry.async_on_unload when setting it up
+    
+    # Remove the service
+    hass.services.async_remove(DOMAIN, "update_todos")
+    
     return True
 
 
@@ -195,10 +211,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     
     hass.services.async_register(DOMAIN, "update_todos", handle_update_service)
     
-    # Set up periodic updates
+    # Set up periodic updates with proper threading approach
+    def _handle_interval(now):
+        """Handle interval timer callback."""
+        hass.add_job(update_todos_from_json, hass, path, todo_entity_id)
+    
     async_track_time_interval(
         hass, 
-        lambda now: hass.async_create_task(update_todos_from_json(hass, path, todo_entity_id)), 
+        _handle_interval,
         timedelta(seconds=scan_interval)
     )
     
