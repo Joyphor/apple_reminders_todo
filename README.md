@@ -18,7 +18,7 @@ This integration allows you to import your Apple Reminders into Home Assistant's
 1. Make sure [HACS](https://hacs.xyz/) is installed in your Home Assistant instance
 2. Add this repository to HACS as a custom repository:
    - Navigate to HACS > Integrations > ⋮ > Custom repositories
-   - Add `https://github.com/yourusername/apple_reminders_todo` with category "Integration"
+   - Add `https://github.com/Joyphor/apple_reminders_todo` with category "Integration"
 3. Search for "Apple Reminders Todo" in HACS and install it
 4. Restart Home Assistant
 
