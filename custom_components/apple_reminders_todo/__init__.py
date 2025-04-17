@@ -77,18 +77,29 @@ def create_rich_description(reminder: dict) -> str:
     return "\n".join([part for part in description_parts if part])
 
 
-async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id: str) -> None:
-    """Update Home Assistant todos from JSON file."""
+async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id: str, last_timestamp=None) -> str:
+    """Update Home Assistant todos from JSON file. Returns the new timestamp."""
     try:
         # Check file existence in an executor
         file_exists = await hass.async_add_executor_job(os.path.exists, path)
         if not file_exists:
             _LOGGER.warning("JSON file not found: %s", path)
-            return
+            return last_timestamp
 
         # Read the JSON file in an executor
         json_data = await hass.async_add_executor_job(_read_json_file, path)
             
+        # Get the timestamp from the JSON
+        json_timestamp = json_data.get("timestamp")
+        
+        # Only process if timestamp has changed
+        if last_timestamp is not None and json_timestamp == last_timestamp:
+            _LOGGER.debug("JSON data hasn't changed since last update (timestamp: %s), skipping", json_timestamp)
+            return last_timestamp
+        
+        _LOGGER.info("JSON data has changed (old timestamp: %s, new timestamp: %s), updating todos", 
+                    last_timestamp, json_timestamp)
+        
         # Get reminders from the proper JSON structure
         reminders = json_data.get("items", [])
         
@@ -98,7 +109,7 @@ async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id:
         
         if not todo_entity:
             _LOGGER.error("Todo entity not found: %s", todo_entity_id)
-            return
+            return json_timestamp  # Still return the timestamp so we don't reprocess
         
         # Get existing todos
         existing_todos = todo_entity.todo_items or []
@@ -113,7 +124,6 @@ async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id:
                     _LOGGER.debug("Successfully removed all existing items")
             except Exception as del_err:
                 _LOGGER.warning("Error during bulk deletion: %s", del_err)
-                # If bulk deletion fails, we'll still try to proceed with adding new items
         
         # Add new items from JSON
         added_count = 0
@@ -143,11 +153,14 @@ async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id:
             except Exception as item_err:
                 _LOGGER.error("Error creating todo item for %s: %s", reminder.get('title'), item_err)
         
-        _LOGGER.info("Todo list update: removed %d existing items, added %d new items", 
+        _LOGGER.info("Todo list update complete: removed %d existing items, added %d new items", 
                     len(existing_todos), added_count)
+        
+        return json_timestamp
         
     except Exception as ex:
         _LOGGER.error("Error updating todos: %s", ex)
+        return last_timestamp
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Apple Reminders Todo from a config entry."""
@@ -157,17 +170,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     todo_entity_id = entry.data[CONF_TODO_LIST]
     scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     
+    # Data storage for this entry
+    entry_data = {
+        "last_timestamp": None
+    }
+    hass.data[DOMAIN][entry.entry_id] = entry_data
+    
     # Create service to manually trigger update
     async def handle_update_service(call: ServiceCall) -> None:
         """Handle the service call."""
-        await update_todos_from_json(hass, path, todo_entity_id)
+        force_update = call.data.get("force", False)
+        timestamp_to_use = None if force_update else entry_data["last_timestamp"]
+        
+        entry_data["last_timestamp"] = await update_todos_from_json(
+            hass, path, todo_entity_id, timestamp_to_use
+        )
     
-    hass.services.async_register(DOMAIN, "update_todos", handle_update_service)
+    hass.services.async_register(
+        DOMAIN, 
+        "update_todos", 
+        handle_update_service,
+        vol.Schema({
+            vol.Optional("force"): cv.boolean,
+        })
+    )
     
     # Set up periodic updates with proper threading approach
     def _handle_interval(now):
         """Handle interval timer callback."""
-        hass.add_job(update_todos_from_json, hass, path, todo_entity_id)
+        async def _update_with_timestamp():
+            entry_data["last_timestamp"] = await update_todos_from_json(
+                hass, path, todo_entity_id, entry_data["last_timestamp"]
+            )
+        hass.add_job(_update_with_timestamp)
     
     # Store the remove callback function so we can clean up on unload
     entry.async_on_unload(
@@ -179,7 +214,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     
     # Initial update
-    await update_todos_from_json(hass, path, todo_entity_id)
+    entry_data["last_timestamp"] = await update_todos_from_json(
+        hass, path, todo_entity_id, None  # Force first update
+    )
     
     return True
 
@@ -204,17 +241,40 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     todo_entity_id = config[DOMAIN][CONF_TODO_LIST]
     scan_interval = config[DOMAIN].get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     
+    # Data storage
+    component_data = {
+        "last_timestamp": None
+    }
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["yaml"] = component_data
+    
     # Create service to manually trigger update
     async def handle_update_service(call: ServiceCall) -> None:
         """Handle the service call."""
-        await update_todos_from_json(hass, path, todo_entity_id)
+        force_update = call.data.get("force", False)
+        timestamp_to_use = None if force_update else component_data["last_timestamp"]
+        
+        component_data["last_timestamp"] = await update_todos_from_json(
+            hass, path, todo_entity_id, timestamp_to_use
+        )
     
-    hass.services.async_register(DOMAIN, "update_todos", handle_update_service)
+    hass.services.async_register(
+        DOMAIN, 
+        "update_todos", 
+        handle_update_service,
+        vol.Schema({
+            vol.Optional("force"): cv.boolean,
+        })
+    )
     
     # Set up periodic updates with proper threading approach
     def _handle_interval(now):
         """Handle interval timer callback."""
-        hass.add_job(update_todos_from_json, hass, path, todo_entity_id)
+        async def _update_with_timestamp():
+            component_data["last_timestamp"] = await update_todos_from_json(
+                hass, path, todo_entity_id, component_data["last_timestamp"]
+            )
+        hass.add_job(_update_with_timestamp)
     
     async_track_time_interval(
         hass, 
@@ -223,6 +283,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     
     # Initial update
-    await update_todos_from_json(hass, path, todo_entity_id)
+    component_data["last_timestamp"] = await update_todos_from_json(
+        hass, path, todo_entity_id, None  # Force first update
+    )
     
     return True
