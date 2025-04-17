@@ -43,26 +43,29 @@ CONFIG_SCHEMA = vol.Schema(
 
 def generate_stable_uid(reminder: dict) -> str:
     """Generate a stable, unique ID for a reminder."""
-    # Combine title and creation time for uniqueness
-    uid_base = f"{reminder['title']}_{reminder['creationDateTime']}"
+    # Get title and creation time with fallbacks
+    title = reminder.get('title', '')
+    creation_time = reminder.get('creationDateTime', '')
+    
+    # Combine to create a unique identifier
+    uid_base = f"{title}_{creation_time}"
+    
     return hashlib.md5(uid_base.encode()).hexdigest()
 
 
 def create_rich_description(reminder: dict) -> str:
     """Create a rich description including all reminder metadata."""
-    data = reminder['data']
-    
     # Format tags if present
     tags_text = ""
-    if data.get('tags') and len(data['tags']) > 0:
-        tags_text = f"Tags: {', '.join(data['tags'])}"
+    if reminder.get('tags') and len(reminder['tags']) > 0:
+        tags_text = f"Tags: {', '.join(reminder['tags'])}"
     
     # Build the description with all available metadata
     description_parts = [
-        f"Priority: {data.get('priority')}" if data.get('priority') and data.get('priority') != "None" else "",
-        f"Flagged: Yes" if data.get('isFlagged') else "",
+        f"Priority: {reminder.get('priority')}" if reminder.get('priority') and reminder.get('priority') != "None" else "",
+        f"Flagged: Yes" if reminder.get('isFlagged') else "",
         tags_text,
-        f"List: {data.get('list')}" if data.get('list') else "",
+        f"List: {reminder.get('list')}" if reminder.get('list') else "",
         f"Created: {reminder.get('creationDateTime')}" if reminder.get('creationDateTime') else ""
     ]
     
@@ -106,12 +109,12 @@ async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id:
                 item = TodoItem(
                     uid=generate_stable_uid(reminder),
                     summary=reminder.get('title', ''),
-                    status=TodoItemStatus.COMPLETED if reminder.get('data', {}).get('isCompleted') else TodoItemStatus.NEEDS_ACTION,
+                    status=TodoItemStatus.COMPLETED if reminder.get('isCompleted') else TodoItemStatus.NEEDS_ACTION,
                     description=create_rich_description(reminder),
                 )
                 
                 # Add due date if available
-                due_date_str = reminder.get('data', {}).get('dueDateTime')
+                due_date_str = reminder.get('dueDateTime')
                 if due_date_str:
                     try:
                         due_date = dt_util.parse_datetime(due_date_str)
