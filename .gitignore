@@ -29,3 +29,6 @@ var/
 # Test coverage
 .coverage
 htmlcov/
+
+#MacOS
+.DS_Store
