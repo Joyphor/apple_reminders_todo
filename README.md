@@ -66,11 +66,11 @@ Your JSON file should have the following structure:
 
 ## Apple Shortcuts Setup
 
-Create a shortcut in Apple Shortcuts app
-Add actions to get all reminders
-Format the data to match the JSON structure above
-Save the JSON to a file accessible by Home Assistant
-Schedule the shortcut to run regularly
+- Create a shortcut in Apple Shortcuts.app
+- Add actions to get desired reminders
+- Format the data to match the JSON structure above
+- Save the JSON to a file accessible by Home Assistant
+- Schedule the shortcut to run regularly
 
 ## Services
 
