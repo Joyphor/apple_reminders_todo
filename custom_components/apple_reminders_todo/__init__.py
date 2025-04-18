@@ -142,7 +142,13 @@ async def update_todos_from_json(hass: HomeAssistant, path: str, todo_entity_id:
                     try:
                         due_date = dt_util.parse_datetime(due_date_str)
                         if due_date:
+                            # Convert to the local timezone that Home Assistant uses
+                            # This is crucial for compatibility with iCal
+                            due_date = dt_util.as_local(due_date)
                             item.due = due_date
+                            _LOGGER.debug("Processed due date %s as %s", due_date_str, due_date)
+                        else:
+                            _LOGGER.warning("Could not parse due date: %s", due_date_str)
                     except (ValueError, TypeError) as err:
                         _LOGGER.warning("Failed to parse due date %s: %s", due_date_str, err)
                 
